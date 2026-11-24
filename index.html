@@ -108,6 +108,10 @@ const $ = id => document.getElementById(id);
 // textContent or esc(); numbers are forced through num(); nothing from the data becomes markup.
 const esc = s => String(s).replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
 const num = (v, d = 0) => (typeof v === 'number' && isFinite(v)) ? v : d;
+// any script error shows in the status line instead of failing silently
+const showErr = msg => { const el = document.getElementById('status'); if (el) el.textContent = `page error: ${msg}`; };
+window.addEventListener('error', e => showErr(e.message || 'script failed to load'));
+window.addEventListener('unhandledrejection', e => showErr((e.reason && e.reason.message) || String(e.reason)));
 const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 const Q = new URLSearchParams(location.search);
 const SRC = (Q.get('src') || '').replace(/\/$/, '');                  // another eloran_web.py server
