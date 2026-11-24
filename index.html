@@ -1,0 +1,377 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>eLoran · MSF · GPS</title>
+<style>
+:root {
+  --bg: #0D1117; --card: #161B22; --edge: #262D38; --text: #E6EDF3; --muted: #8B949E; --faint: #3A4250;
+  --eloran: #F5A524; --eloran2: #FB7185; --msf: #2DD4BF; --gps: #60A5FA; --ok: #3FB950; --bad: #F85149;
+  --slot: #1E242D; --tile: #1B212A; --chip-on: #2A2112; --land: #1F2A37; --coast: #33465A;
+  --f-other: #64748B; --f-year: #A78BFA; --f-month: #F472B6; --f-day: #FBBF24; --f-hour: #34D399; --f-min: #2DD4BF;
+}
+:root[data-theme="light"] {
+  --bg: #EEF1F5; --card: #FFFFFF; --edge: #D0D7DE; --text: #1F2328; --muted: #57606A; --faint: #C4CBD3;
+  --eloran: #C2620A; --eloran2: #D6336C; --msf: #0E8C80; --gps: #2563EB; --ok: #1A7F37; --bad: #CF222E;
+  --slot: #EDF0F3; --tile: #F6F8FA; --chip-on: #FFF1DC; --land: #E4EAF0; --coast: #A9B6C4;
+  --f-other: #94A3B8; --f-year: #7C3AED; --f-month: #DB2777; --f-day: #C2620A; --f-hour: #059669; --f-min: #0E8C80;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--text);
+  font: 15px/1.4 Inter, "Segoe UI", system-ui, -apple-system, "DejaVu Sans", sans-serif; }
+.mono { font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace; }
+main { display: grid; gap: 12px; padding: 14px; grid-template-columns: 5fr 5fr 4fr;
+  grid-template-rows: auto minmax(330px, 1.15fr) minmax(330px, 1fr); height: calc(100vh - 44px); min-height: 860px; }
+.card { background: var(--card); border: 1px solid var(--edge); border-radius: 16px; padding: 16px 20px;
+  display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.head h2 { margin: 0; font-size: 18px; font-weight: 700; }
+.dot { width: 12px; height: 12px; border-radius: 50%; flex: none; }
+.head .right { margin-left: auto; color: var(--muted); font-weight: 700; font-size: 15px; white-space: nowrap; }
+.wide { grid-column: span 2; }
+.plot { flex: 1; position: relative; min-height: 180px; }
+.plot canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+/* clocks */
+.clock .time { flex: 1; display: flex; align-items: center; justify-content: center; white-space: nowrap;
+  font-variant-numeric: tabular-nums; font-weight: 700; font-size: clamp(34px, 3.4vw, 60px); letter-spacing: -0.5px; }
+.clock .time .ms { font-size: 0.5em; margin-left: 2px; align-self: flex-end; margin-bottom: 0.32em; }
+.clock .time.off { color: var(--faint); }
+/* MSF */
+.bar { display: grid; grid-template-columns: repeat(60, 1fr); gap: 3px; height: 48px; margin-top: 26px; position: relative; }
+.bar div { border-radius: 2px; background: var(--slot); }
+.bar div.cur { outline: 2px solid var(--text); outline-offset: 2px; }
+.ticks { position: relative; height: 18px; color: var(--muted); font-size: 12px; margin-top: 6px; }
+.ticks span { position: absolute; transform: translateX(-50%); }
+.under { display: grid; grid-template-columns: repeat(60, 1fr); gap: 3px; height: 4px; margin-top: 4px; }
+.tiles { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; flex: 1; margin-top: 18px; min-height: 110px; max-height: 240px; }
+.tile { background: var(--tile); border: 1px solid var(--edge); border-radius: 10px; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 4px; }
+.tile .lab { font-weight: 700; font-size: 15px; }
+.tile .val { font-weight: 700; font-size: clamp(28px, 2.8vw, 48px); font-variant-numeric: tabular-nums; color: var(--faint); }
+.tile.done { border-width: 2px; }
+.tile.done .val { color: var(--text); }
+.tile.prev .val { color: var(--muted); }
+/* data channel */
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.chip { border: 1px solid var(--edge); border-radius: 6px; padding: 4px 12px; font-weight: 700; font-size: 14px; color: var(--muted); }
+.chip.on { border-color: var(--eloran); background: var(--chip-on); color: var(--text); }
+.utc { color: var(--eloran); font-weight: 700; font-size: 17px; margin-bottom: 10px; }
+.msgs { overflow: hidden; flex: 1; min-height: 0; }
+.msg { display: grid; grid-template-columns: 80px 1fr; column-gap: 12px; padding: 6px 0; border-top: 1px solid var(--edge); }
+.msg .t { color: var(--muted); font-size: 14px; }
+.msg .ty { color: var(--eloran); font-weight: 700; font-size: 14px; }
+.msg .tx { grid-column: 2; font-size: 14px; overflow-wrap: anywhere; }
+.msg.bad .ty { color: var(--bad); }
+.empty { color: var(--muted); margin: auto; }
+/* eLoran - GPS */
+.big { font-size: 40px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.diffrow { display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; }
+.fixed { text-align: right; color: var(--muted); }
+.fixed b { display: block; font-size: 17px; }
+footer { display: flex; justify-content: space-between; align-items: center; padding: 0 22px 12px; color: var(--muted); font-size: 14px; }
+footer button { background: none; border: 1px solid var(--edge); color: var(--text); border-radius: 8px; padding: 5px 12px;
+  font: inherit; font-weight: 700; cursor: pointer; }
+.live { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--faint); margin-right: 8px; }
+.live.on { background: var(--ok); }
+@media (max-width: 1000px) {
+  main { grid-template-columns: 1fr; grid-template-rows: none; height: auto; min-height: 0; }
+  .wide { grid-column: auto; }
+  .card.tall { min-height: 340px; }
+  .tiles { gap: 8px; } .bar { gap: 2px; } .under { gap: 2px; }
+}
+</style>
+</head>
+<body>
+<main>
+  <section class="card clock"><div class="head"><span class="dot" style="background:var(--eloran)"></span><h2>eLoran</h2><span class="right" id="st-elo">UTC</span></div><div class="time off" id="clk-elo">--:--:--</div></section>
+  <section class="card clock"><div class="head"><span class="dot" style="background:var(--msf)"></span><h2>MSF</h2><span class="right" id="st-msf">UTC</span></div><div class="time off" id="clk-msf">--:--:--</div></section>
+  <section class="card clock"><div class="head"><span class="dot" style="background:var(--gps)"></span><h2>GPS</h2><span class="right" id="st-gps">UTC</span></div><div class="time off" id="clk-gps">--:--:--</div></section>
+
+  <section class="card tall"><div class="head"><span class="dot" style="background:var(--eloran)"></span><h2>eLoran signal</h2><span class="right" id="snr" style="color:var(--eloran)"></span></div><div class="plot"><canvas id="gri"></canvas></div></section>
+  <section class="card wide tall"><div class="head"><span class="dot" style="background:var(--msf)"></span><h2>MSF signal</h2><span class="right" id="msf-last"></span></div>
+    <div class="ticks" id="ticks"></div><div class="bar" id="bar" style="margin-top:0"></div><div class="under" id="under"></div>
+    <div class="tiles" id="tiles"></div></section>
+
+  <section class="card tall"><div class="head"><span class="dot" style="background:var(--eloran)"></span><h2>eLoran data channel</h2></div>
+    <div class="chips" id="chips"></div><div class="utc" id="utc"></div><div class="msgs" id="msgs"></div></section>
+  <section class="card tall"><div class="head"><span class="dot" style="background:var(--eloran)"></span><h2>eLoran − GPS</h2><span class="right">last hour</span></div>
+    <div class="diffrow"><div class="big" id="dnow">–</div><div class="fixed" id="dfix"></div></div><div class="plot"><canvas id="diff"></canvas></div></section>
+  <section class="card tall"><div class="head"><h2>Where</h2><span class="right" id="km" style="color:var(--text)"></span></div><div class="plot"><canvas id="map"></canvas></div></section>
+</main>
+<footer><span><span class="live" id="live"></span><span id="status">connecting…</span></span><button id="theme"></button></footer>
+
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+// Data can come from a PUBLIC broker, where anyone may publish: every value is untrusted. Text goes in via
+// textContent or esc(); numbers are forced through num(); nothing from the data becomes markup.
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+const num = (v, d = 0) => (typeof v === 'number' && isFinite(v)) ? v : d;
+const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+const Q = new URLSearchParams(location.search);
+const SRC = (Q.get('src') || '').replace(/\/$/, '');                  // another eloran_web.py server
+const BROKER = Q.get('broker') || 'wss://broker.hivemq.com:8884/mqtt';  // the defaults eloran_web.py --publish uses
+const TOPIC = Q.get('topic') || 'gs-pnt/eloran/413fd8467a93/state';
+
+// ── theme: the system's choice unless the viewer picked one ───────────────
+function setTheme(t) {
+  document.documentElement.dataset.theme = t;
+  $('theme').textContent = t === 'dark' ? '☀  Light mode' : '☾  Dark mode';
+  try { localStorage.setItem('theme', t); } catch (e) {}
+  if (S) render();
+}
+let S = null, recv = 0;
+let saved = null;
+try { saved = localStorage.getItem('theme'); } catch (e) {}
+const qTheme = new URLSearchParams(location.search).get('theme');          // ?theme=light|dark overrides
+setTheme(['light', 'dark'].includes(qTheme) ? qTheme
+         : saved || (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'));
+$('theme').onclick = () => setTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
+
+// ── clocks: snapshot value + time since it arrived (smooth, independent of the viewer's own clock) ──
+function fmtClock(el, unix) {
+  if (unix == null) { el.className = 'time off'; el.textContent = '--:--:--'; return; }
+  const d = new Date(unix * 1000);
+  const p = n => String(n).padStart(2, '0');
+  el.className = 'time';
+  el.innerHTML = `${p(d.getUTCHours())}:${p(d.getUTCMinutes())}:${p(d.getUTCSeconds())}` +
+    `<span class="ms" style="color:${el.dataset.col}">.${String(d.getUTCMilliseconds()).padStart(3, '0')}</span>`;
+}
+$('clk-elo').dataset.col = 'var(--eloran)'; $('clk-msf').dataset.col = 'var(--msf)'; $('clk-gps').dataset.col = 'var(--gps)';
+function tickClocks() {
+  if (S) {
+    const dt = (performance.now() - recv) / 1000, c = S.clocks, stale = dt > 5 || S.offline;
+    fmtClock($('clk-elo'), c.eloran == null || stale ? null : c.eloran + dt);
+    fmtClock($('clk-msf'), c.msf == null || stale ? null : c.msf + dt);
+    fmtClock($('clk-gps'), c.gps == null || stale ? null : c.gps + dt);
+    $('st-elo').textContent = c.eloran == null ? 'acquiring…' : 'UTC';
+    $('st-msf').textContent = c.msf == null ? (c.msf_state === 'decoding' ? 'decoding…' : 'searching…') : 'UTC';
+    $('st-gps').textContent = c.gps == null ? 'waiting…' : 'UTC';
+  }
+  requestAnimationFrame(tickClocks);
+}
+requestAnimationFrame(tickClocks);
+
+// ── canvases ──────────────────────────────────────────────────────────────
+function ctx2d(cv) {
+  const r = window.devicePixelRatio || 1, w = cv.clientWidth, h = cv.clientHeight;
+  if (cv.width !== Math.round(w * r) || cv.height !== Math.round(h * r)) { cv.width = Math.round(w * r); cv.height = Math.round(h * r); }
+  const g = cv.getContext('2d'); g.setTransform(r, 0, 0, r, 0, 0); g.clearRect(0, 0, w, h);
+  return [g, w, h];
+}
+const FONT = getComputedStyle(document.body).fontFamily;
+
+function drawGri() {
+  const [g, W, H] = ctx2d($('gri')), G = S.gri;
+  const cx = W / 2, cy = H / 2 + 6, R = Math.min(W - 150, H - 40) / 2, r0 = R * 0.55;
+  const ang = ms => 2 * Math.PI * ms / G.gri_ms - Math.PI / 2;
+  g.strokeStyle = css('--faint'); g.lineWidth = 1; g.beginPath(); g.arc(cx, cy, r0, 0, 2 * Math.PI); g.stroke();
+  const segs = [[0, G.m_ms - 0.3, '--faint'], [G.m_ms - 0.3, G.m_ms + 9.6, '--eloran'], [G.m_ms + 9.6, G.s_ms - 0.3, '--faint'],
+                [G.s_ms - 0.3, G.s_ms + 8.6, '--eloran2'], [G.s_ms + 8.6, G.gri_ms + 1, '--faint']];
+  if (G.fold) {
+    const n = G.fold.length;
+    for (const [a0, a1, col] of segs) {
+      g.strokeStyle = css(col); g.lineWidth = col === '--faint' ? 1 : 2.5; g.beginPath();
+      let first = true;
+      for (let i = 0; i < n; i++) {
+        const ms = i * G.gri_ms / n;
+        if (ms < a0 || ms > a1) continue;
+        const rr = r0 + (R - r0) * G.fold[i], a = ang(ms), x = cx + rr * Math.cos(a), y = cy + rr * Math.sin(a);
+        if (first) { g.moveTo(x, y); first = false; } else g.lineTo(x, y);
+      }
+      g.stroke();
+    }
+  } else {
+    g.fillStyle = css('--muted'); g.font = `15px ${FONT}`; g.textAlign = 'center'; g.fillText('waiting for pulses', cx, cy + (r0 + R) / 2);
+  }
+  g.font = `bold 15px ${FONT}`;
+  for (const [ms, col, lab] of [[G.m_ms + 4.5, '--eloran', 'master'], [G.s_ms + 4, '--eloran2', 'secondary']]) {
+    const a = ang(ms), x = cx + (R + 8) * Math.cos(a), y = cy + (R + 8) * Math.sin(a);
+    g.fillStyle = css(col); g.textAlign = Math.cos(a) > 0.2 ? 'left' : Math.cos(a) < -0.2 ? 'right' : 'center';
+    g.textBaseline = 'middle'; g.fillText(lab, x, y);
+  }
+  g.textAlign = 'center'; g.fillStyle = css('--muted'); g.font = `14px ${FONT}`; g.fillText('GRI', cx, cy - 16);
+  g.fillStyle = css('--text'); g.font = `bold 34px ${FONT}`; g.fillText(String(G.gri), cx, cy + 14);
+  $('snr').textContent = G.snr == null ? '' : `SNR ${Math.round(G.snr)} dB`;
+}
+
+// MSF: one block per second, coloured by the field it carries (bright = bit 1, dim = bit 0); big tiles below
+const FIELDS = [['DUT1', 1, 16, null], ['year', 17, 24, [80, 40, 20, 10, 8, 4, 2, 1]], ['month', 25, 29, [10, 8, 4, 2, 1]],
+  ['day', 30, 35, [20, 10, 8, 4, 2, 1]], ['wday', 36, 38, [4, 2, 1]], ['hour', 39, 44, [20, 10, 8, 4, 2, 1]],
+  ['min', 45, 51, [40, 20, 10, 8, 4, 2, 1]], ['ident', 52, 59, null]];
+const TILES = [['YEAR', 'year', '--f-year'], ['MONTH', 'month', '--f-month'], ['DAY', 'day', '--f-day'],
+  ['HOUR', 'hour', '--f-hour'], ['MIN', 'min', '--f-min']];
+const colOf = Object.fromEntries(TILES.map(t => [t[1], t[2]]));
+const fieldAt = s => (FIELDS.find(f => f[1] <= s && s <= f[2]) || [])[0];
+(function buildMsf() {
+  for (let s = 0; s < 60; s++) {
+    $('bar').appendChild(document.createElement('div'));
+    const u = document.createElement('div'), f = fieldAt(s);
+    if (colOf[f]) u.style.background = `var(${colOf[f]})`;
+    $('under').appendChild(u);
+  }
+  for (const s of [0, 15, 30, 45, 59]) {
+    const sp = document.createElement('span'); sp.textContent = s; sp.style.left = `${(s + 0.5) / 60 * 100}%`; $('ticks').appendChild(sp);
+  }
+  for (const [lab, nm, col] of TILES) {
+    const t = document.createElement('div'); t.className = 'tile'; t.id = `tile-${nm}`;
+    t.innerHTML = `<div class="lab" style="color:var(${col})">${lab}</div><div class="val">··</div>`;
+    $('tiles').appendChild(t);
+  }
+})();
+function mix(hex, f) {
+  const c = css('--card'), p = (h, i) => parseInt(h.slice(i, i + 2), 16);
+  return '#' + [1, 3, 5].map(i => Math.round(p(c, i) + (p(hex, i) - p(c, i)) * f).toString(16).padStart(2, '0')).join('');
+}
+function fieldVal(nm, bits) {
+  const f = FIELDS.find(x => x[0] === nm);
+  for (let s = f[1]; s <= f[2]; s++) if (!bits[s]) return null;
+  let v = 0; f[3].forEach((w, k) => { if (bits[f[1] + k][0]) v += w; });
+  return nm === 'year' ? `20${String(v).padStart(2, '0')}` : String(v).padStart(2, '0');
+}
+function drawMsf() {
+  const M = S.msf, blocks = $('bar').children;
+  for (let s = 0; s < 60; s++) {
+    const b = blocks[s], col = css(colOf[fieldAt(s)] || '--f-other');
+    b.className = s === M.cur ? 'cur' : '';
+    if (s === 0) b.style.background = M.cur != null && M.cur >= 0 ? css('--text') : css('--slot');
+    else if (M.bits[s]) b.style.background = M.bits[s][0] ? col : mix(col, 0.28);
+    else b.style.background = css('--slot');
+  }
+  for (const [, nm, col] of TILES) {
+    const now = fieldVal(nm, M.bits), prev = fieldVal(nm, M.prev), t = $(`tile-${nm}`);
+    t.className = 'tile' + (now ? ' done' : prev ? ' prev' : '');
+    t.style.borderColor = now ? css(col) : '';
+    t.querySelector('.val').textContent = now || prev || '··';
+  }
+  const last = $('msf-last');
+  last.textContent = M.last ? `✓ ${M.last}` : (M.synced ? 'decoding…' : 'searching…');
+  last.style.color = M.last ? css('--ok') : css('--muted');
+}
+
+function drawData() {
+  const D = S.data;
+  $('chips').innerHTML = Object.entries(D.counts || {}).slice(0, 8)
+    .map(([k, n]) => `<span class="chip${num(n) ? ' on' : ''}">${esc(k)} ${num(n)}</span>`).join('');
+  $('utc').textContent = D.utc || '';
+  const msgs = Array.isArray(D.msgs) ? D.msgs.slice(0, 20) : [];
+  $('msgs').innerHTML = msgs.length ? msgs.map(m =>
+    `<div class="msg${m.bad ? ' bad' : ''}"><span class="t mono">${esc(m.t)}</span><span class="ty">${esc(m.type)}</span>` +
+    `<span class="tx mono">${esc(m.text)}${m.bad ? ` (rejected: ${esc(m.bad)})` : ''}</span></div>`).join('')
+    : '<div class="empty">no messages yet</div>';
+}
+
+function drawDiff() {
+  const D = S.diff, [g, W, H] = ctx2d($('diff'));
+  if (!D) { $('dnow').textContent = '–'; $('dfix').innerHTML = '';
+    g.fillStyle = css('--muted'); g.font = `15px ${FONT}`; g.textAlign = 'center'; g.fillText('waiting for the carrier tracker', W / 2, H / 2); return; }
+  $('dnow').textContent = `${num(D.now) >= 0 ? '+' : ''}${num(D.now).toFixed(1)} ns`;
+  $('dfix').innerHTML = D.fixed_us == null ? 'fixed delay: anchoring…' : `<b class="mono">${num(D.fixed_us).toFixed(3)} µs</b>fixed delay`;
+  const x0 = 54, x1 = W - 6, y0 = 14, y1 = H - 10, mid = (y0 + y1) / 2, span = 3600;
+  const abs = D.r.map(Math.abs).sort((a, b) => a - b);
+  const lim = Math.max(10, (abs[Math.floor(abs.length * 0.98)] || 0) * 1.15);
+  g.font = `13px ${FONT}`; g.textAlign = 'right'; g.textBaseline = 'middle';
+  for (const v of [-lim, 0, lim]) {
+    const y = mid - v / lim * (y1 - y0) / 2;
+    g.strokeStyle = css(v ? '--edge' : '--faint'); g.setLineDash(v ? [2, 3] : []); g.lineWidth = 1;
+    g.beginPath(); g.moveTo(x0, y); g.lineTo(x1, y); g.stroke();
+    g.fillStyle = css('--muted'); g.fillText(v ? `${v > 0 ? '+' : ''}${Math.round(v)}` : '0 ns', x0 - 8, y);
+  }
+  g.setLineDash([]); g.strokeStyle = css('--eloran'); g.lineWidth = 2; g.beginPath();
+  D.t.forEach((t, i) => {
+    const x = x0 + (t + span) / span * (x1 - x0), y = mid - Math.max(-1, Math.min(1, D.r[i] / lim)) * (y1 - y0) / 2;
+    i ? g.lineTo(x, y) : g.moveTo(x, y);
+  });
+  g.stroke();
+}
+
+let COAST = null;
+(function loadCoast(delay) {                      // retried until it arrives: one failed request must not blank the map
+  fetch('uk_coast.json', {cache: 'no-cache'})
+    .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+    .then(j => { COAST = j.rings; if (S) drawMap(); })
+    .catch(e => { console.warn('coastline:', e); setTimeout(() => loadCoast(Math.min(delay * 2, 30000)), delay); });
+})(1000);
+function drawMap() {
+  const L = S.loc, [g, W, H] = ctx2d($('map'));
+  $('km').textContent = `${L.km.toFixed(1)} km`;
+  const LAT0 = 49.8, LAT1 = 60.9, LONC = -4.0, kx = Math.cos(55 * Math.PI / 180), s = (H - 8) / (LAT1 - LAT0);
+  const P = (la, lo) => [W / 2 + (lo - LONC) * kx * s, H - 4 - (la - LAT0) * s];
+  g.fillStyle = css('--land'); g.strokeStyle = css('--coast'); g.lineWidth = 1;
+  for (const ring of COAST || []) {
+    g.beginPath(); ring.forEach(([lo, la], i) => { const [x, y] = P(la, lo); i ? g.lineTo(x, y) : g.moveTo(x, y); });
+    g.closePath(); g.fill(); g.stroke();
+  }
+  const [ax, ay] = P(...L.anthorn), [bx, by] = P(...L.gs);
+  g.strokeStyle = css('--text'); g.lineWidth = 2; g.beginPath(); g.moveTo(ax, ay); g.lineTo(bx, by); g.stroke();
+  for (const [x, y, col] of [[ax, ay, '--eloran'], [bx, by, '--gps']]) {
+    g.fillStyle = css(col); g.strokeStyle = css('--card'); g.lineWidth = 2;
+    g.beginPath(); g.arc(x, y, 6, 0, 2 * Math.PI); g.fill(); g.stroke();
+  }
+  g.font = `bold 15px ${FONT}`; g.textBaseline = 'middle'; g.textAlign = 'left';
+  g.fillStyle = css('--eloran'); g.fillText('Anthorn', ax + 12, ay + 12);
+  g.fillStyle = css('--gps'); g.fillText('GS', bx + 12, by - 10);
+  g.fillStyle = css('--text'); g.font = `bold 14px ${FONT}`; g.fillText(`${Math.round(L.km)} km`, Math.max(ax, bx) + 12, (ay + by) / 2);
+}
+
+function render() {
+  for (const f of [drawGri, drawMsf, drawData, drawDiff, drawMap]) {
+    try { f(); } catch (e) { console.error(f.name, e); }
+  }
+  $('status').textContent = S.status || '';
+}
+window.addEventListener('resize', () => { if (S) render(); });
+
+// ── live data ───────────────────────────────────────────────────────────
+// Served by eloran_web.py (it answers /state): its Server-Sent Events stream. Anywhere else (GitHub Pages):
+// the public MQTT broker eloran_web.py --publish pushes to, over secure WebSockets. ?via=sse|mqtt forces one.
+function onSnapshot(obj, via) {
+  if (!obj || typeof obj !== 'object' || !obj.clocks || !obj.gri || !obj.msf || !obj.data || !obj.loc) return;
+  S = obj;
+  const lag = Date.now() / 1000 - num(S.t);                // snapshot age by the viewer's clock (relay delay)
+  S.offline = lag > 15;                                     // e.g. the broker's retained copy of a stopped receiver
+  recv = performance.now() - (lag > 0 && lag < 5 ? lag * 1000 : 0);
+  $('live').className = S.offline ? 'live' : 'live on';
+  render();
+  if (S.offline) $('status').textContent =
+    `receiver offline: last update ${new Date(num(S.t) * 1000).toISOString().slice(0, 16).replace('T', ' ')} UTC`;
+  else $('status').textContent = `${S.status || ''}  ·  live via ${via}`;
+}
+function viaSse() {
+  const es = new EventSource(`${SRC}/events`);
+  es.onmessage = ev => { try { onSnapshot(JSON.parse(ev.data), 'local server'); } catch (e) { console.warn(e); } };
+  es.onerror = () => { $('live').className = 'live'; $('status').textContent = 'receiver offline: reconnecting…'; };
+}
+function viaMqtt() {
+  $('status').textContent = 'connecting to the relay…';
+  const sc = document.createElement('script');
+  sc.src = 'https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js';
+  sc.integrity = 'sha384-u4uqeACkFcoKl57rBQJHVGDd1pqhW4w8X3WjTu1ZksPdxoLqdt34jpoNkJisE25W';
+  sc.crossOrigin = 'anonymous';
+  sc.onerror = () => { $('status').textContent = 'could not load the MQTT client'; };
+  sc.onload = () => {
+    const c = mqtt.connect(BROKER, {clientId: 'gs-pnt-view-' + Math.random().toString(16).slice(2, 10),
+                                    reconnectPeriod: 3000, connectTimeout: 10000, clean: true});
+    c.on('connect', () => c.subscribe(TOPIC, {qos: 0}));
+    c.on('message', (_t, payload) => {
+      if (payload.length > 200000) return;                  // a snapshot is ~15 kB: ignore anything absurd
+      try { onSnapshot(JSON.parse(new TextDecoder().decode(payload)), 'relay'); } catch (e) { console.warn(e); }
+    });
+    c.on('offline', () => { $('live').className = 'live'; $('status').textContent = 'relay offline: reconnecting…'; });
+  };
+  document.head.appendChild(sc);
+}
+(async function connect() {
+  const via = Q.get('via');
+  if (via === 'mqtt') return viaMqtt();
+  if (via === 'sse' || SRC) return viaSse();
+  try {
+    const r = await fetch('state', {cache: 'no-store'});
+    if (r.ok && (r.headers.get('content-type') || '').includes('json')) return viaSse();
+  } catch (e) {}
+  viaMqtt();
+})();
+</script>
+</body>
+</html>
