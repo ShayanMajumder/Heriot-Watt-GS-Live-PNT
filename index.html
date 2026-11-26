@@ -22,7 +22,7 @@ html, body { margin: 0; background: var(--bg); color: var(--text);
   font: 15px/1.4 Inter, "Segoe UI", system-ui, -apple-system, "DejaVu Sans", sans-serif; }
 .mono { font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace; }
 main { display: grid; gap: 12px; padding: 14px; grid-template-columns: 5fr 5fr 4fr;
-  grid-template-rows: auto minmax(330px, 1.15fr) minmax(330px, 1fr); height: calc(100vh - 44px); min-height: 860px; }
+  grid-template-rows: auto minmax(330px, 1.15fr) minmax(330px, 1fr) minmax(380px, 1fr); height: calc(100vh - 44px); min-height: 1260px; }
 .card { background: var(--card); border: 1px solid var(--edge); border-radius: 16px; padding: 16px 20px;
   display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
@@ -70,6 +70,14 @@ main { display: grid; gap: 12px; padding: 14px; grid-template-columns: 5fr 5fr 4
 .diffrow { display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; }
 .fixed { text-align: right; color: var(--muted); }
 .fixed b { display: block; font-size: 17px; }
+/* GPS sky view (Airspy Mini + GNSS-SDR) */
+.fixline { display: flex; flex-wrap: wrap; gap: 6px 18px; color: var(--muted); font-size: 14px; margin-bottom: 8px; }
+.fixline b { color: var(--text); font-variant-numeric: tabular-nums; }
+.legend { display: flex; gap: 14px; align-items: center; color: var(--muted); font-size: 13px; font-weight: 600; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; vertical-align: -1px; }
+#tip { position: fixed; pointer-events: none; z-index: 10; background: var(--card); border: 1px solid var(--edge);
+  border-radius: 8px; padding: 6px 10px; font-size: 13px; line-height: 1.45; box-shadow: 0 4px 14px rgba(0,0,0,.25); display: none; }
+#tip b { color: var(--gps); }
 footer { display: flex; justify-content: space-between; align-items: center; padding: 0 22px 12px; color: var(--muted); font-size: 14px; }
 footer button { background: none; border: 1px solid var(--edge); color: var(--text); border-radius: 8px; padding: 5px 12px;
   font: inherit; font-weight: 700; cursor: pointer; }
@@ -99,7 +107,15 @@ footer button { background: none; border: 1px solid var(--edge); color: var(--te
   <section class="card tall"><div class="head"><span class="dot" style="background:var(--eloran)"></span><h2>eLoran − GPS</h2><span class="right">last hour</span></div>
     <div class="diffrow"><div class="big" id="dnow">–</div><div class="fixed" id="dfix"></div></div><div class="plot"><canvas id="diff"></canvas></div></section>
   <section class="card tall"><div class="head"><h2>Where</h2><span class="right" id="km" style="color:var(--text)"></span></div><div class="plot"><canvas id="map"></canvas></div></section>
+
+  <section class="card tall"><div class="head"><span class="dot" style="background:var(--gps)"></span><h2>GPS sky view</h2><span class="right" id="sky-n"></span></div>
+    <div class="plot"><canvas id="sky"></canvas></div></section>
+  <section class="card wide tall"><div class="head"><span class="dot" style="background:var(--gps)"></span><h2>GPS satellites</h2>
+    <span class="legend" style="margin-left:14px"><span><i style="background:var(--gps)"></i>used in fix</span><span><i id="lg-trk"></i>tracking</span></span>
+    <span class="right" id="gnss-src"></span></div>
+    <div class="fixline" id="fixline"></div><div class="plot"><canvas id="cn0"></canvas></div></section>
 </main>
+<div id="tip"></div>
 <footer><span><span class="live" id="live"></span><span id="status">connecting…</span></span><button id="theme"></button></footer>
 
 <script>
@@ -330,8 +346,121 @@ function drawMap() {
   g.fillStyle = css('--text'); g.font = `bold 14px ${FONT}`; g.fillText(`${Math.round(L.km)} km`, Math.max(ax, bx) + 12, (ay + by) / 2);
 }
 
+// ── GPS from the Airspy Mini + GNSS-SDR: sky view (azimuth / elevation) and C/N0 per satellite ──────────
+const HITS = {sky: [], cn0: []};
+function gnssSats() {
+  const G = S.gnss;
+  if (!G || !Array.isArray(G.sats)) return [];
+  return G.sats.slice(0, 40).map(s => ({prn: Math.round(num(s.prn)), el: typeof s.el === 'number' ? s.el : null,
+    az: typeof s.az === 'number' ? s.az : null, cn0: typeof s.cn0 === 'number' ? s.cn0 : null,
+    used: s.used === true, trk: s.trk === true})).filter(s => s.prn > 0 && s.prn < 64);
+}
+const satTip = s => `<b>GPS PRN ${s.prn}</b><br>${s.used ? 'used in the fix' : s.trk ? 'tracking' : 'in view'}` +
+  (s.el != null ? `<br>elevation ${Math.round(s.el)}°, azimuth ${Math.round(s.az)}°` : '<br>position: after the first fix') +
+  (s.cn0 != null ? `<br>C/N0 ${Math.round(s.cn0)} dB-Hz` : '');
+const GNSS_STATE = {off: 'not running (--no-gnss)', 'no-gnss-sdr': 'GNSS-SDR not installed', starting: 'starting GNSS-SDR…',
+  searching: 'acquiring satellites…', restarting: 'restarting GNSS-SDR…', fix: 'fix', error: 'error'};
+function drawSky() {
+  const [g, W, H] = ctx2d($('sky')), G = S.gnss, sats = gnssSats();
+  HITS.sky = [];
+  const cx = W / 2, cy = H / 2, R = Math.max(20, Math.min(W, H) / 2 - 22);
+  const P = (el, az) => { const r = R * (90 - Math.max(0, Math.min(90, el))) / 90, a = az * Math.PI / 180;
+    return [cx + r * Math.sin(a), cy - r * Math.cos(a)]; };
+  g.strokeStyle = css('--edge'); g.lineWidth = 1;
+  for (const el of [0, 30, 60]) { g.beginPath(); g.arc(cx, cy, R * (90 - el) / 90, 0, 2 * Math.PI); g.stroke(); }
+  g.beginPath(); g.moveTo(cx - R, cy); g.lineTo(cx + R, cy); g.moveTo(cx, cy - R); g.lineTo(cx, cy + R); g.stroke();
+  g.fillStyle = css('--muted'); g.font = `bold 13px ${FONT}`; g.textAlign = 'center'; g.textBaseline = 'middle';
+  for (const [lab, az] of [['N', 0], ['E', 90], ['S', 180], ['W', 270]]) { const [x, y] = P(-9, az); g.fillText(lab, x, y); }
+  g.font = `12px ${FONT}`; g.textAlign = 'left';
+  for (const el of [30, 60]) { const [x, y] = P(el, 45); g.fillText(`${el}°`, x + 3, y - 2); }
+  const placed = sats.filter(s => s.el != null && s.az != null && s.el >= 0);
+  $('sky-n').textContent = G && G.state !== 'off' ? `${placed.filter(s => s.used).length} used · ${sats.length} seen` : '';
+  // the last hour of each satellite's path across the sky
+  const tracks = (G && G.tracks && typeof G.tracks === 'object') ? G.tracks : {};
+  g.strokeStyle = mix(css('--gps'), 0.45); g.lineWidth = 2; g.lineCap = 'round';
+  for (const k of Object.keys(tracks).slice(0, 40)) {
+    const pts = Array.isArray(tracks[k]) ? tracks[k].slice(-80) : [];
+    if (pts.length < 2) continue;
+    g.beginPath();
+    pts.forEach((p, i) => { const [x, y] = P(num(p[0]), num(p[1])); i ? g.lineTo(x, y) : g.moveTo(x, y); });
+    g.stroke();
+  }
+  if (!placed.length) {
+    g.fillStyle = css('--muted'); g.font = `15px ${FONT}`; g.textAlign = 'center';
+    const st = G ? (GNSS_STATE[G.state] || '') : 'no GPS data from this receiver';
+    g.fillText(sats.length ? `${sats.length} tracking · positions after the first fix` : st, cx, cy + R / 2);
+  }
+  const rr = 11;
+  for (const s of placed) {
+    const [x, y] = P(s.el, s.az);
+    g.beginPath(); g.arc(x, y, rr, 0, 2 * Math.PI);
+    g.fillStyle = s.used ? css('--gps') : css('--card'); g.fill();
+    g.lineWidth = 2; g.strokeStyle = s.used ? css('--card') : css('--gps'); g.stroke();
+    g.fillStyle = s.used ? css('--card') : css('--text'); g.font = `bold 11px ${FONT}`; g.textAlign = 'center';
+    g.fillText(String(s.prn), x, y + 0.5);
+    HITS.sky.push({x, y, r: rr + 5, html: satTip(s)});
+  }
+}
+function drawCn0() {
+  const [g, W, H] = ctx2d($('cn0')), G = S.gnss, sats = gnssSats();
+  HITS.cn0 = [];
+  $('lg-trk').style.cssText = `background:${css('--card')};border:2px solid ${css('--gps')};width:10px;height:10px`;
+  $('gnss-src').textContent = G && G.src ? String(G.src).slice(0, 40) : '';
+  const fl = $('fixline');
+  if (!G || G.state === 'off' || G.state === 'no-gnss-sdr') {
+    fl.textContent = G ? GNSS_STATE[G.state] : 'no GPS data from this receiver';
+  } else if (G.fix) {
+    const t = typeof G.utc === 'number' ? new Date(G.utc * 1000).toISOString().slice(11, 19) : '–';
+    fl.innerHTML = `<span><b style="color:var(--ok)">● fix</b></span><span><b>${Math.round(num(G.n_used))}</b> satellites</span>` +
+      `<span>HDOP <b>${num(G.hdop).toFixed(1)}</b></span>` +
+      `<span><b class="mono">${num(G.lat).toFixed(5)}°, ${num(G.lon).toFixed(5)}°</b></span><span>height <b>${Math.round(num(G.alt))} m</b></span>` +
+      `<span>fix time <b class="mono">${t}</b> UTC</span>`;
+  } else {
+    fl.textContent = `${GNSS_STATE[G.state] || String(G.state).slice(0, 30)}${sats.length ? ` · ${sats.length} satellites tracking` : ''}` +
+      (G.note ? ` · ${String(G.note).slice(0, 120)}` : '');
+  }
+  const bars = sats.filter(s => s.cn0 != null);
+  const x0 = 46, x1 = W - 8, y0 = 10, y1 = H - 24, top = 55;
+  const Y = v => y1 - Math.max(0, Math.min(top, v)) / top * (y1 - y0);
+  g.font = `12px ${FONT}`; g.textAlign = 'right'; g.textBaseline = 'middle';
+  for (const v of [0, 20, 30, 40, 50]) {
+    g.strokeStyle = css(v ? '--edge' : '--faint'); g.setLineDash(v ? [2, 3] : []); g.lineWidth = 1;
+    g.beginPath(); g.moveTo(x0, Y(v)); g.lineTo(x1, Y(v)); g.stroke();
+    g.fillStyle = css('--muted'); g.fillText(String(v), x0 - 6, Y(v));
+  }
+  g.setLineDash([]);
+  g.save(); g.translate(12, (y0 + y1) / 2); g.rotate(-Math.PI / 2); g.textAlign = 'center'; g.fillText('C/N0 dB-Hz', 0, 0); g.restore();
+  if (!bars.length) {
+    g.fillStyle = css('--muted'); g.font = `15px ${FONT}`; g.textAlign = 'center';
+    g.fillText('no satellite signal yet', (x0 + x1) / 2, (y0 + y1) / 2); return;
+  }
+  const slot = (x1 - x0) / Math.max(bars.length, 6), bw = Math.min(34, slot * 0.62);
+  bars.forEach((s, i) => {
+    const xc = x0 + slot * (i + 0.5), yt = Y(s.cn0), r = Math.min(4, bw / 2, y1 - yt);
+    g.fillStyle = s.used ? css('--gps') : mix(css('--gps'), 0.4);
+    g.beginPath(); g.moveTo(xc - bw / 2, y1); g.lineTo(xc - bw / 2, yt + r); g.arcTo(xc - bw / 2, yt, xc, yt, r);
+    g.arcTo(xc + bw / 2, yt, xc + bw / 2, yt + r, r); g.lineTo(xc + bw / 2, y1); g.closePath(); g.fill();
+    g.fillStyle = css('--text'); g.font = `bold 12px ${FONT}`; g.textAlign = 'center'; g.textBaseline = 'top';
+    g.fillText(String(s.prn), xc, y1 + 6);
+    HITS.cn0.push({x0: xc - slot / 2, x1: xc + slot / 2, html: satTip(s)});
+  });
+}
+function hover(id, find) {
+  const cv = $(id), tip = $('tip');
+  cv.addEventListener('mousemove', ev => {
+    const b = cv.getBoundingClientRect(), x = ev.clientX - b.left, y = ev.clientY - b.top, h = find(x, y);
+    if (!h) { tip.style.display = 'none'; return; }
+    tip.innerHTML = h.html; tip.style.display = 'block';
+    tip.style.left = `${Math.min(ev.clientX + 14, innerWidth - tip.offsetWidth - 8)}px`;
+    tip.style.top = `${Math.min(ev.clientY + 14, innerHeight - tip.offsetHeight - 8)}px`;
+  });
+  cv.addEventListener('mouseleave', () => { tip.style.display = 'none'; });
+}
+hover('sky', (x, y) => HITS.sky.find(h => (h.x - x) ** 2 + (h.y - y) ** 2 <= h.r * h.r));
+hover('cn0', (x) => HITS.cn0.find(h => x >= h.x0 && x < h.x1));
+
 function render() {
-  for (const f of [drawGri, drawMsf, drawData, drawDiff, drawMap]) {
+  for (const f of [drawGri, drawMsf, drawData, drawDiff, drawMap, drawSky, drawCn0]) {
     try { f(); } catch (e) { console.error(f.name, e); }
   }
   $('status').textContent = S.status || '';
