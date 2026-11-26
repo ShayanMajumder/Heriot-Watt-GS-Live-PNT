@@ -21,34 +21,36 @@
 html, body { margin: 0; background: var(--bg); color: var(--text);
   font: 15px/1.4 Inter, "Segoe UI", system-ui, -apple-system, "DejaVu Sans", sans-serif; }
 .mono { font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace; }
-main { display: grid; gap: 12px; padding: 14px; grid-template-columns: 5fr 5fr 4fr;
-  grid-template-rows: auto minmax(330px, 1.15fr) minmax(330px, 1fr) minmax(380px, 1fr); height: calc(100vh - 44px); min-height: 1260px; }
-.card { background: var(--card); border: 1px solid var(--edge); border-radius: 16px; padding: 16px 20px;
+/* one screen: 12 columns; clocks, signals + sky view, data / eLoran - GPS / map / C/N0, then the GPS solution strip */
+main { display: grid; gap: 10px; padding: 10px 12px; grid-template-columns: repeat(12, minmax(0, 1fr));
+  grid-template-rows: auto minmax(0, 1fr) minmax(0, 1fr) auto; height: calc(100vh - 34px); min-height: 680px; }
+.c3 { grid-column: span 3; } .c4 { grid-column: span 4; } .c6 { grid-column: span 6; } .c12 { grid-column: span 12; }
+.card { background: var(--card); border: 1px solid var(--edge); border-radius: 14px; padding: 10px 16px;
   display: flex; flex-direction: column; min-width: 0; min-height: 0; }
-.head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
-.head h2 { margin: 0; font-size: 18px; font-weight: 700; }
+.head { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.head h2 { margin: 0; font-size: 16px; font-weight: 700; white-space: nowrap; }
 .dot { width: 12px; height: 12px; border-radius: 50%; flex: none; }
-.head .right { margin-left: auto; color: var(--muted); font-weight: 700; font-size: 15px; white-space: nowrap; }
+.head .right { margin-left: auto; color: var(--muted); font-weight: 700; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .wide { grid-column: span 2; }
-.plot { flex: 1; position: relative; min-height: 180px; }
+.plot { flex: 1; position: relative; min-height: 120px; }
 .plot canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 /* clocks */
 .clock .time { flex: 1; display: flex; align-items: center; justify-content: center; white-space: nowrap;
-  font-variant-numeric: tabular-nums; font-weight: 700; font-size: clamp(34px, 3.4vw, 60px); letter-spacing: -0.5px; }
+  font-variant-numeric: tabular-nums; font-weight: 700; font-size: clamp(28px, 2.7vw, 50px); letter-spacing: -0.5px; line-height: 1.1; }
 .clock .time .ms { font-size: 0.5em; margin-left: 2px; align-self: flex-end; margin-bottom: 0.32em; }
 .clock .time.off { color: var(--faint); }
 /* MSF */
-.bar { display: grid; grid-template-columns: repeat(60, 1fr); gap: 3px; height: 48px; margin-top: 26px; position: relative; }
+.bar { display: grid; grid-template-columns: repeat(60, 1fr); gap: 3px; height: 40px; margin-top: 20px; position: relative; }
 .bar div { border-radius: 2px; background: var(--slot); }
 .bar div.cur { outline: 2px solid var(--text); outline-offset: 2px; }
 .ticks { position: relative; height: 18px; color: var(--muted); font-size: 12px; margin-top: 6px; }
 .ticks span { position: absolute; transform: translateX(-50%); }
 .under { display: grid; grid-template-columns: repeat(60, 1fr); gap: 3px; height: 4px; margin-top: 4px; }
-.tiles { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; flex: 1; margin-top: 18px; min-height: 110px; max-height: 240px; }
+.tiles { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; flex: 1; margin-top: 12px; min-height: 64px; max-height: 190px; }
 .tile { background: var(--tile); border: 1px solid var(--edge); border-radius: 10px; display: flex; flex-direction: column;
   align-items: center; justify-content: center; gap: 4px; }
 .tile .lab { font-weight: 700; font-size: 15px; }
-.tile .val { font-weight: 700; font-size: clamp(28px, 2.8vw, 48px); font-variant-numeric: tabular-nums; color: var(--faint); }
+.tile .val { font-weight: 700; font-size: clamp(22px, 2.3vw, 42px); font-variant-numeric: tabular-nums; color: var(--faint); }
 .tile.done { border-width: 2px; }
 .tile.done .val { color: var(--text); }
 .tile.prev .val { color: var(--muted); }
@@ -59,33 +61,39 @@ main { display: grid; gap: 12px; padding: 14px; grid-template-columns: 5fr 5fr 4
 .chip-note { align-self: center; color: var(--muted); font-size: 13px; }
 .utc { color: var(--eloran); font-weight: 700; font-size: 17px; margin-bottom: 10px; }
 .msgs { overflow: hidden; flex: 1; min-height: 0; }
-.msg { display: grid; grid-template-columns: 80px 1fr; column-gap: 12px; padding: 6px 0; border-top: 1px solid var(--edge); }
+.msg { display: grid; grid-template-columns: 70px 1fr; column-gap: 10px; padding: 4px 0; border-top: 1px solid var(--edge); }
 .msg .t { color: var(--muted); font-size: 14px; }
 .msg .ty { color: var(--eloran); font-weight: 700; font-size: 14px; }
 .msg .tx { grid-column: 2; font-size: 14px; overflow-wrap: anywhere; }
 .msg.bad .ty { color: var(--bad); }
 .empty { color: var(--muted); margin: auto; }
 /* eLoran - GPS */
-.big { font-size: 40px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.big { font-size: clamp(26px, 2.2vw, 36px); font-weight: 700; font-variant-numeric: tabular-nums; }
 .diffrow { display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; }
 .fixed { text-align: right; color: var(--muted); }
 .fixed b { display: block; font-size: 17px; }
 /* GPS sky view (Airspy Mini + GNSS-SDR) */
-.fixline { display: flex; flex-wrap: wrap; gap: 6px 18px; color: var(--muted); font-size: 14px; margin-bottom: 8px; }
-.fixline b { color: var(--text); font-variant-numeric: tabular-nums; }
+/* GPS solution strip */
+.gpsbar { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 4px 22px; padding: 8px 16px; font-size: 14px; color: var(--muted); }
+.gpsbar h2 { margin: 0; font-size: 15px; font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+.gpsbar b { color: var(--text); font-variant-numeric: tabular-nums; }
+.gpsbar .src { margin-left: auto; white-space: nowrap; }
+#gps-sol { display: contents; }
+@media (max-width: 1800px) { .gpsbar .src { display: none; } }
 .legend { display: flex; gap: 14px; align-items: center; color: var(--muted); font-size: 13px; font-weight: 600; }
 .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; vertical-align: -1px; }
 #tip { position: fixed; pointer-events: none; z-index: 10; background: var(--card); border: 1px solid var(--edge);
   border-radius: 8px; padding: 6px 10px; font-size: 13px; line-height: 1.45; box-shadow: 0 4px 14px rgba(0,0,0,.25); display: none; }
 #tip b { color: var(--gps); }
-footer { display: flex; justify-content: space-between; align-items: center; padding: 0 22px 12px; color: var(--muted); font-size: 14px; }
-footer button { background: none; border: 1px solid var(--edge); color: var(--text); border-radius: 8px; padding: 5px 12px;
+footer { display: flex; justify-content: space-between; align-items: center; height: 34px; padding: 0 16px 6px; color: var(--muted); font-size: 13px; }
+footer button { background: none; border: 1px solid var(--edge); color: var(--text); border-radius: 8px; padding: 2px 10px;
   font: inherit; font-weight: 700; cursor: pointer; }
 .live { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--faint); margin-right: 8px; }
 .live.on { background: var(--ok); }
 @media (max-width: 1000px) {
   main { grid-template-columns: 1fr; grid-template-rows: none; height: auto; min-height: 0; }
-  .wide { grid-column: auto; }
+  .wide, .c3, .c4, .c6, .c12 { grid-column: auto; }
+  footer { height: auto; padding: 4px 16px 12px; }
   .card.tall { min-height: 340px; }
   .tiles { gap: 8px; } .bar { gap: 2px; } .under { gap: 2px; }
 }
@@ -93,27 +101,28 @@ footer button { background: none; border: 1px solid var(--edge); color: var(--te
 </head>
 <body>
 <main>
-  <section class="card clock"><div class="head"><span class="dot" style="background:var(--eloran)"></span><h2>eLoran</h2><span class="right" id="st-elo">UTC</span></div><div class="time off" id="clk-elo">--:--:--</div></section>
-  <section class="card clock"><div class="head"><span class="dot" style="background:var(--msf)"></span><h2>MSF</h2><span class="right" id="st-msf">UTC</span></div><div class="time off" id="clk-msf">--:--:--</div></section>
-  <section class="card clock"><div class="head"><span class="dot" style="background:var(--gps)"></span><h2>GPS</h2><span class="right" id="st-gps">UTC</span></div><div class="time off" id="clk-gps">--:--:--</div></section>
+  <section class="card clock c4"><div class="head"><span class="dot" style="background:var(--eloran)"></span><h2>eLoran</h2><span class="right" id="st-elo">UTC</span></div><div class="time off" id="clk-elo">--:--:--</div></section>
+  <section class="card clock c4"><div class="head"><span class="dot" style="background:var(--msf)"></span><h2>MSF</h2><span class="right" id="st-msf">UTC</span></div><div class="time off" id="clk-msf">--:--:--</div></section>
+  <section class="card clock c4"><div class="head"><span class="dot" style="background:var(--gps)"></span><h2>GPS</h2><span class="right" id="st-gps">UTC</span></div><div class="time off" id="clk-gps">--:--:--</div></section>
 
-  <section class="card tall"><div class="head"><span class="dot" style="background:var(--eloran)"></span><h2>eLoran signal</h2><span class="right" id="snr" style="color:var(--eloran)"></span></div><div class="plot"><canvas id="gri"></canvas></div></section>
-  <section class="card wide tall"><div class="head"><span class="dot" style="background:var(--msf)"></span><h2>MSF signal</h2><span class="right" id="msf-last"></span></div>
+  <section class="card tall c3"><div class="head"><span class="dot" style="background:var(--eloran)"></span><h2>eLoran signal</h2><span class="right" id="snr" style="color:var(--eloran)"></span></div><div class="plot"><canvas id="gri"></canvas></div></section>
+  <section class="card tall c6"><div class="head"><span class="dot" style="background:var(--msf)"></span><h2>MSF signal</h2><span class="right" id="msf-last"></span></div>
     <div class="ticks" id="ticks"></div><div class="bar" id="bar" style="margin-top:0"></div><div class="under" id="under"></div>
     <div class="tiles" id="tiles"></div></section>
-
-  <section class="card tall"><div class="head"><span class="dot" style="background:var(--eloran)"></span><h2>eLoran data channel</h2></div>
-    <div class="chips" id="chips"></div><div class="utc" id="utc"></div><div class="msgs" id="msgs"></div></section>
-  <section class="card tall"><div class="head"><span class="dot" style="background:var(--eloran)"></span><h2>eLoran − GPS</h2><span class="right">last hour</span></div>
-    <div class="diffrow"><div class="big" id="dnow">–</div><div class="fixed" id="dfix"></div></div><div class="plot"><canvas id="diff"></canvas></div></section>
-  <section class="card tall"><div class="head"><h2>Where</h2><span class="right" id="km" style="color:var(--text)"></span></div><div class="plot"><canvas id="map"></canvas></div></section>
-
-  <section class="card tall"><div class="head"><span class="dot" style="background:var(--gps)"></span><h2>GPS sky view</h2><span class="right" id="sky-n"></span></div>
+  <section class="card tall c3"><div class="head"><span class="dot" style="background:var(--gps)"></span><h2>GPS sky view</h2><span class="right" id="sky-n"></span></div>
     <div class="plot"><canvas id="sky"></canvas></div></section>
-  <section class="card wide tall"><div class="head"><span class="dot" style="background:var(--gps)"></span><h2>GPS satellites</h2>
-    <span class="legend" style="margin-left:14px"><span><i style="background:var(--gps)"></i>used in fix</span><span><i id="lg-trk"></i>tracking</span></span>
-    <span class="right" id="gnss-src"></span></div>
-    <div class="fixline" id="fixline"></div><div class="plot"><canvas id="cn0"></canvas></div></section>
+
+  <section class="card tall c3"><div class="head"><span class="dot" style="background:var(--eloran)"></span><h2>eLoran data channel</h2></div>
+    <div class="chips" id="chips"></div><div class="utc" id="utc"></div><div class="msgs" id="msgs"></div></section>
+  <section class="card tall c3"><div class="head"><span class="dot" style="background:var(--eloran)"></span><h2>eLoran − GPS</h2><span class="right">last hour</span></div>
+    <div class="diffrow"><div class="big" id="dnow">–</div><div class="fixed" id="dfix"></div></div><div class="plot"><canvas id="diff"></canvas></div></section>
+  <section class="card tall c3"><div class="head"><h2>Where</h2><span class="right" id="km" style="color:var(--text)"></span></div><div class="plot"><canvas id="map"></canvas></div></section>
+  <section class="card tall c3"><div class="head"><span class="dot" style="background:var(--gps)"></span><h2>GPS C/N0</h2>
+    <span class="legend" style="margin-left:auto"><span><i style="background:var(--gps)"></i>used</span><span><i id="lg-trk"></i>tracking</span></span></div>
+    <div class="plot"><canvas id="cn0"></canvas></div></section>
+
+  <section class="card gpsbar c12" id="gpsbar"><h2><span class="dot" style="background:var(--gps)"></span>GPS solution</h2>
+    <span id="gps-sol">waiting…</span><span class="src" id="gnss-src"></span></section>
 </main>
 <div id="tip"></div>
 <footer><span><span class="live" id="live"></span><span id="status">connecting…</span></span><button id="theme"></button></footer>
@@ -405,22 +414,8 @@ function drawCn0() {
   const [g, W, H] = ctx2d($('cn0')), G = S.gnss, sats = gnssSats();
   HITS.cn0 = [];
   $('lg-trk').style.cssText = `background:${css('--card')};border:2px solid ${css('--gps')};width:10px;height:10px`;
-  $('gnss-src').textContent = G && G.src ? String(G.src).slice(0, 40) : '';
-  const fl = $('fixline');
-  if (!G || G.state === 'off' || G.state === 'no-gnss-sdr') {
-    fl.textContent = G ? GNSS_STATE[G.state] : 'no GPS data from this receiver';
-  } else if (G.fix) {
-    const t = typeof G.utc === 'number' ? new Date(G.utc * 1000).toISOString().slice(11, 19) : '–';
-    fl.innerHTML = `<span><b style="color:var(--ok)">● fix</b></span><span><b>${Math.round(num(G.n_used))}</b> satellites</span>` +
-      `<span>HDOP <b>${num(G.hdop).toFixed(1)}</b></span>` +
-      `<span><b class="mono">${num(G.lat).toFixed(5)}°, ${num(G.lon).toFixed(5)}°</b></span><span>height <b>${Math.round(num(G.alt))} m</b></span>` +
-      `<span>fix time <b class="mono">${t}</b> UTC</span>`;
-  } else {
-    fl.textContent = `${GNSS_STATE[G.state] || String(G.state).slice(0, 30)}${sats.length ? ` · ${sats.length} satellites tracking` : ''}` +
-      (G.note ? ` · ${String(G.note).slice(0, 120)}` : '');
-  }
   const bars = sats.filter(s => s.cn0 != null);
-  const x0 = 46, x1 = W - 8, y0 = 10, y1 = H - 24, top = 55;
+  const x0 = 40, x1 = W - 4, y0 = 8, y1 = H - 22, top = 55;
   const Y = v => y1 - Math.max(0, Math.min(top, v)) / top * (y1 - y0);
   g.font = `12px ${FONT}`; g.textAlign = 'right'; g.textBaseline = 'middle';
   for (const v of [0, 20, 30, 40, 50]) {
@@ -434,7 +429,7 @@ function drawCn0() {
     g.fillStyle = css('--muted'); g.font = `15px ${FONT}`; g.textAlign = 'center';
     g.fillText('no satellite signal yet', (x0 + x1) / 2, (y0 + y1) / 2); return;
   }
-  const slot = (x1 - x0) / Math.max(bars.length, 6), bw = Math.min(34, slot * 0.62);
+  const slot = (x1 - x0) / Math.max(bars.length, 6), bw = Math.min(30, slot * 0.66);
   bars.forEach((s, i) => {
     const xc = x0 + slot * (i + 0.5), yt = Y(s.cn0), r = Math.min(4, bw / 2, y1 - yt);
     g.fillStyle = s.used ? css('--gps') : mix(css('--gps'), 0.4);
@@ -444,6 +439,35 @@ function drawCn0() {
     g.fillText(String(s.prn), xc, y1 + 6);
     HITS.cn0.push({x0: xc - slot / 2, x1: xc + slot / 2, html: satTip(s)});
   });
+}
+// bottom strip: the GNSS-SDR position solution, its precision (scatter of the last 10 min of fixes about their
+// mean) and how far that mean is from the B210 GPSDO's own position
+function drawGpsBar() {
+  const G = S.gnss, el = $('gps-sol'), sats = gnssSats();
+  $('gnss-src').textContent = G && G.src ? String(G.src).slice(0, 40) : '';
+  if (!G || G.state === 'off' || G.state === 'no-gnss-sdr') { el.textContent = G ? GNSS_STATE[G.state] : 'no GPS data from this receiver'; return; }
+  if (!G.fix) {
+    el.textContent = `${GNSS_STATE[G.state] || String(G.state).slice(0, 30)}${sats.length ? ` · ${sats.length} satellites tracking` : ''}` +
+      (G.note ? ` · ${String(G.note).slice(0, 120)}` : '');
+    return;
+  }
+  const t = typeof G.utc === 'number' ? new Date(G.utc * 1000).toISOString().slice(11, 19) : '–';
+  const P = G.prec && typeof G.prec === 'object' ? G.prec : null;
+  let prec = '<span>precision <b>building…</b> (10 min of fixes)</span>', vs = '';
+  if (P) {
+    prec = `<span>precision <b>±${num(P.drms_m).toFixed(1)} m</b> 2D RMS · height <b>±${num(P.h_sd_m).toFixed(1)} m</b> ` +
+           `<span style="opacity:.8">(${Math.round(num(P.n))} fixes, ${Math.round(num(P.span_s) / 60)} min)</span></span>`;
+    const L = S.loc;
+    if (L && L.live && Array.isArray(L.gs)) {
+      const ky = 111133, kx = ky * Math.cos(num(P.lat) * Math.PI / 180);
+      const d = Math.hypot((num(P.lat) - num(L.gs[0])) * ky, (num(P.lon) - num(L.gs[1])) * kx);
+      vs = `<span>vs B210 GPSDO <b>${d.toFixed(1)} m</b></span>`;
+    }
+  }
+  el.innerHTML = `<span><b style="color:var(--ok)">● fix</b> · <b>${Math.round(num(G.n_used))}</b>/${sats.length} satellites</span>` +
+    `<span>HDOP <b>${num(G.hdop).toFixed(1)}</b> · PDOP <b>${num(G.pdop).toFixed(1)}</b></span>` +
+    `<span><b class="mono">${num(G.lat).toFixed(6)}°, ${num(G.lon).toFixed(6)}°</b></span><span>height <b>${num(G.alt).toFixed(1)} m</b></span>` +
+    prec + vs + `<span>fix <b class="mono">${t}</b> UTC</span>`;
 }
 function hover(id, find) {
   const cv = $(id), tip = $('tip');
@@ -460,7 +484,7 @@ hover('sky', (x, y) => HITS.sky.find(h => (h.x - x) ** 2 + (h.y - y) ** 2 <= h.r
 hover('cn0', (x) => HITS.cn0.find(h => x >= h.x0 && x < h.x1));
 
 function render() {
-  for (const f of [drawGri, drawMsf, drawData, drawDiff, drawMap, drawSky, drawCn0]) {
+  for (const f of [drawGri, drawMsf, drawData, drawDiff, drawMap, drawSky, drawCn0, drawGpsBar]) {
     try { f(); } catch (e) { console.error(f.name, e); }
   }
   $('status').textContent = S.status || '';
